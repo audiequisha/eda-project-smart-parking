@@ -7,36 +7,33 @@ import seaborn as sns
 # 1. KONFIGURASI HALAMAN
 # ==========================================
 st.set_page_config(
-    page_title="Smart Parking Analytics Dashboard",
+    page_title="Laporan Analisis Smart Parking",
     page_icon="🚗",
-    layout="wide"
+    layout="centered" 
 )
 sns.set_style("whitegrid")
 
-st.title("🚗 Smart Parking Executive Dashboard")
-st.markdown("Analisis optimasi utilitas lahan parkir berbasis observasi sensor kamera.")
+st.title("🚗 Laporan Analisis Smart Parking")
+st.markdown("Laporan interaktif ini merangkum metrik kepadatan dan tren penggunaan lahan parkir. Silakan gunakan filter di menu samping untuk mengeksplorasi variabel data secara spesifik.")
 
 # ==========================================
-# 2. LOAD DATA (DENGAN PENGAMAN ERROR)
+# 2. LOAD DATA
 # ==========================================
 @st.cache_data
 def load_data():
     df = pd.read_csv("dashboard_dataset.csv")
     
-    # Deteksi dan amankan kolom datetime / day_of_week
     if 'datetime' in df.columns:
         df['datetime'] = pd.to_datetime(df['datetime'], errors='coerce')
         df['day_type'] = df['datetime'].dt.dayofweek.apply(
             lambda x: 'Weekend' if pd.notnull(x) and x >= 5 else 'Weekday'
         )
     elif 'day_of_week' in df.columns:
-        # Cadangan jika datetime tidak ada tapi day_of_week ada
         df['day_of_week_num'] = pd.to_numeric(df['day_of_week'], errors='coerce')
         df['day_type'] = df['day_of_week_num'].apply(
             lambda x: 'Weekend' if pd.notnull(x) and x >= 5 else 'Weekday'
         )
         
-    # Amankan mapping cuaca
     if 'weather_label' not in df.columns and 'weather' in df.columns:
         df['weather_label'] = df['weather'].map({
             'O': 'Mendung (Overcast)', 'R': 'Hujan (Rainy)', 'S': 'Cerah (Sunny)'
@@ -51,27 +48,23 @@ except FileNotFoundError:
     st.stop()
 
 # ==========================================
-# 3. SIDEBAR CONTROLS (FILTER YANG DITINGKATKAN & AMAN)
+# 3. SIDEBAR CONTROLS
 # ==========================================
-st.sidebar.header("⚙️ Filter Eksplorasi Data")
+st.sidebar.header("⚙️ Filter Parameter Data")
 
-# Filter 1: Tipe Hari (Aman dari KeyError)
 if 'day_type' in df.columns:
     list_hari = ["Semua Hari"] + list(df['day_type'].dropna().unique())
     selected_day_type = st.sidebar.selectbox("Pilih Tipe Hari:", list_hari)
 else:
     selected_day_type = "Semua Hari"
 
-# Filter 2: Kondisi Cuaca (Aman dari KeyError)
 if 'weather_label' in df.columns:
     list_cuaca = ["Semua Cuaca"] + list(df['weather_label'].dropna().unique())
     selected_weather = st.sidebar.selectbox("Pilih Kondisi Cuaca:", list_cuaca)
 else:
     selected_weather = "Semua Cuaca"
 
-# Filter 3: Rentang Jam (Slider Interaktif)
 if 'hour' in df.columns:
-    # Memastikan data jam berbentuk angka
     df['hour'] = pd.to_numeric(df['hour'], errors='coerce')
     min_hour = int(df['hour'].min()) if pd.notnull(df['hour'].min()) else 0
     max_hour = int(df['hour'].max()) if pd.notnull(df['hour'].max()) else 23
@@ -79,7 +72,6 @@ if 'hour' in df.columns:
 else:
     selected_hours = (0, 23)
 
-# Filter 4: Multi-select ID Kamera
 cam_col = 'camera_id' if 'camera_id' in df.columns else 'camera'
 if cam_col in df.columns:
     list_kamera = list(df[cam_col].dropna().unique())
@@ -87,22 +79,18 @@ if cam_col in df.columns:
 else:
     selected_cameras = []
 
-# Aplikasi Filter ke Dataset
 df_filtered = df.copy()
 if selected_day_type != "Semua Hari" and 'day_type' in df_filtered.columns:
     df_filtered = df_filtered[df_filtered['day_type'] == selected_day_type]
-
 if selected_weather != "Semua Cuaca" and 'weather_label' in df_filtered.columns:
     df_filtered = df_filtered[df_filtered['weather_label'] == selected_weather]
-
 if 'hour' in df_filtered.columns:
     df_filtered = df_filtered[(df_filtered['hour'] >= selected_hours[0]) & (df_filtered['hour'] <= selected_hours[1])]
-
 if len(selected_cameras) > 0 and cam_col in df_filtered.columns:
     df_filtered = df_filtered[df_filtered[cam_col].isin(selected_cameras)]
 
 # ==========================================
-# 4. KARTU RINGKASAN UTAMA (KPI METRICS)
+# 4. KARTU RINGKASAN UTAMA (KPI)
 # ==========================================
 occ_col = 'occupied' if 'occupied' in df_filtered.columns else 'occupancy'
 slot_cols = [col for col in df_filtered.columns if 'slot' in col.lower()]
@@ -112,106 +100,96 @@ total_kamera = df_filtered[cam_col].nunique() if cam_col in df_filtered.columns 
 total_slot = df_filtered[slot_col].nunique() if slot_col in df_filtered.columns else 0
 avg_occupancy = df_filtered[occ_col].mean() * 100 if occ_col in df_filtered.columns else 0
 
+st.markdown("### Ringkasan Eksekutif")
 col1, col2, col3 = st.columns(3)
 with col1:
-    st.metric(label="Total Kamera Aktif", value=f"{total_kamera} Unit")
-    st.caption("Cakupan infrastruktur sensor pemantau di area parkir.")
+    st.metric(label="Kamera Aktif", value=f"{total_kamera} Unit")
 with col2:
-    st.metric(label="Total Slot Parkir Dimonitor", value=f"{total_slot} Lapak")
-    st.caption("Kapasitas ruang parkir maksimal yang terdata.")
+    st.metric(label="Kapasitas Slot Dimonitor", value=f"{total_slot} Lapak")
 with col3:
-    st.metric(label="Rata-rata Tingkat Okupansi", value=f"{avg_occupancy:.2f}%")
-    st.caption("Persentase produktivitas utilitas pengisian lahan parkir.")
-
+    st.metric(label="Rata-rata Okupansi", value=f"{avg_occupancy:.2f}%")
 st.markdown("---")
 
 # ==========================================
-# 5. BARIS GRAFIK 1: ANALISIS KAMERA & WAKTU
+# 5. GRAFIK VERTIKAL & NARASI MOTIVASI ANALITIS
 # ==========================================
-g_col1, g_col2 = st.columns(2)
 
-with g_col1:
-    st.subheader("📊 Kepadatan Parkir per Area Kamera")
-    if cam_col in df_filtered.columns and occ_col in df_filtered.columns:
-        camera_occ = df_filtered.groupby(cam_col)[occ_col].mean().sort_values(ascending=False)
-        fig1, ax1 = plt.subplots(figsize=(10, 5))
-        camera_occ.plot(kind="bar", color="coral", ax=ax1)
-        ax1.set_ylabel("Okupansi (%)")
-        ax1.set_yticklabels(['{:.0f}%'.format(x*100) for x in ax1.get_yticks()])
-        st.pyplot(fig1)
-        
-        with st.expander("💡 Narasi Data & Insight"):
-            kamera_puncak = camera_occ.idxmax() if not camera_occ.empty else "N/A"
-            st.write(f"Grafik ini mengidentifikasi area kamera mana yang paling sering penuh. Saat ini, **Kamera {kamera_puncak}** memiliki tingkat okupansi tertinggi, menjadikannya titik paling padat. Manajemen dapat menggunakan data ini untuk merelokasi petugas pengawas ke area yang paling kritis terisi.")
-    else:
-        st.info("Data kamera tidak tersedia.")
+# Grafik 1
+st.subheader("1. Kepadatan Parkir Berdasarkan Area Kamera")
+if cam_col in df_filtered.columns and occ_col in df_filtered.columns and not df_filtered.empty:
+    camera_occ = df_filtered.groupby(cam_col)[occ_col].mean().sort_values(ascending=False)
+    fig1, ax1 = plt.subplots(figsize=(10, 4))
+    camera_occ.plot(kind="bar", color="coral", ax=ax1)
+    ax1.set_ylabel("Okupansi (%)")
+    ax1.set_yticklabels(['{:.0f}%'.format(x*100) for x in ax1.get_yticks()])
+    st.pyplot(fig1)
+    
+    st.success(f"**Insight & Motivasi:** Di balik distribusi bar ini, terdapat pola probabilitas yang menunggu untuk dipecahkan. Kamera {camera_occ.idxmax()} membuktikan dirinya sebagai titik kepadatan absolut. Teruslah tajam dalam memetakan setiap variabel, karena solusi yang presisi selalu berawal dari observasi yang akurat. Tetap semangat merumuskan inovasi!")
+st.markdown("<br>", unsafe_allow_html=True)
 
-with g_col2:
-    st.subheader("📈 Pola Tren Okupansi Berdasarkan Jam")
-    if 'hour' in df_filtered.columns and occ_col in df_filtered.columns:
-        hourly_occ = df_filtered.groupby('hour')[occ_col].mean()
-        fig2, ax2 = plt.subplots(figsize=(10, 5))
-        hourly_occ.plot(kind="line", marker="o", color="dodgerblue", linewidth=2, ax=ax2)
-        ax2.set_xlabel("Jam Operasional")
-        # Mengatur x-ticks secara dinamis tanpa error
-        min_h = int(df_filtered['hour'].min()) if not df_filtered['hour'].dropna().empty else 0
-        max_h = int(df_filtered['hour'].max()) if not df_filtered['hour'].dropna().empty else 23
-        ax2.set_xticks(range(min_h, max_h + 1))
-        ax2.set_yticklabels(['{:.0f}%'.format(x*100) for x in ax2.get_yticks()])
-        st.pyplot(fig2)
-        
-        with st.expander("💡 Narasi Data & Insight"):
-            st.write("Grafik garis memetakan jam sibuk (*peak hours*). Lonjakan grafik menandakan waktu kedatangan kendaraan tertinggi. Ini mempermudah penentuan kebijakan penarifan dinamis (*dynamic pricing*) atau penjadwalan pembersihan area saat okupansi sedang menyentuh titik terendah.")
-    else:
-        st.info("Data jam (hour) tidak tersedia.")
+# Grafik 2
+st.subheader("2. Pola Kepadatan Berdasarkan Jam Operasional")
+if 'hour' in df_filtered.columns and occ_col in df_filtered.columns and not df_filtered.empty:
+    hourly_occ = df_filtered.groupby('hour')[occ_col].mean()
+    fig2, ax2 = plt.subplots(figsize=(10, 4))
+    hourly_occ.plot(kind="line", marker="o", color="dodgerblue", linewidth=2, ax=ax2)
+    ax2.set_xlabel("Jam Operasional")
+    ax2.set_ylabel("Rata-rata Okupansi")
+    ax2.set_xticks(range(int(df_filtered['hour'].min()), int(df_filtered['hour'].max()) + 1))
+    ax2.set_yticklabels(['{:.0f}%'.format(x*100) for x in ax2.get_yticks()])
+    st.pyplot(fig2)
+    
+    st.info(f"**Insight & Motivasi:** Seperti fungsi yang bergerak dinamis terhadap waktu, pergerakan tren ini membuktikan bahwa selalu ada titik ekuilibrium di setiap kesibukan (puncak di pukul {hourly_occ.idxmax()}:00). Jangan pernah lelah menyusun algoritma yang efisien untuk menghadapi segala perubahan yang dinamis di masa depan!")
+st.markdown("<br>", unsafe_allow_html=True)
 
-# ==========================================
-# 6. BARIS GRAFIK 2: GRAFIK BARU (WEEKDAY VS WEEKEND) & TOP SLOT
-# ==========================================
-g_col3, g_col4 = st.columns(2)
+# Grafik 3
+st.subheader("3. Perbandingan Hari Kerja (Weekday) vs Akhir Pekan (Weekend)")
+if 'day_type' in df_filtered.columns and occ_col in df_filtered.columns and not df_filtered.empty:
+    day_occ = df_filtered.groupby('day_type')[occ_col].mean().reset_index()
+    fig3, ax3 = plt.subplots(figsize=(10, 4))
+    sns.barplot(data=day_occ, x='day_type', y=occ_col, palette="Pastel1", ax=ax3)
+    ax3.set_xlabel("Tipe Hari")
+    ax3.set_ylabel("Rata-Rata Okupansi")
+    ax3.set_yticklabels(['{:.0f}%'.format(x*100) for x in ax3.get_yticks()])
+    st.pyplot(fig3)
+    
+    st.success("**Insight & Motivasi:** Perbedaan ritme antara akhir pekan dan hari kerja bukanlah sekadar angka, melainkan anomali yang memperkaya pemodelan kita. Jadikan setiap deviasi data sebagai pendorong untuk menyempurnakan kalkulasi akhir. Kedisiplinan dalam melihat dua sisi inilah yang melahirkan keputusan bisnis yang matang!")
+st.markdown("<br>", unsafe_allow_html=True)
 
-with g_col3:
-    st.subheader("🗓️ Kepadatan: Hari Kerja (Weekday) vs Akhir Pekan (Weekend)")
-    if 'day_type' in df_filtered.columns and occ_col in df_filtered.columns:
-        day_occ = df_filtered.groupby('day_type')[occ_col].mean().reset_index()
-        fig3, ax3 = plt.subplots(figsize=(10, 5))
-        sns.barplot(data=day_occ, x='day_type', y=occ_col, palette="Pastel1", ax=ax3)
-        ax3.set_ylabel("Rata-Rata Okupansi")
-        ax3.set_yticklabels(['{:.0f}%'.format(x*100) for x in ax3.get_yticks()])
-        st.pyplot(fig3)
-        
-        with st.expander("💡 Narasi Data & Insight"):
-            st.write("Grafik ini membandingkan perilaku parkir antara hari kerja dan hari libur. Perbedaan tinggi batang menunjukkan apakah lahan parkir ini lebih didominasi oleh mobilitas harian pekerja kantor (*weekday*) atau pengunjung rekreasi (*weekend*).")
-    else:
-        st.info("Data tipe hari tidak tersedia.")
+# Grafik 4
+st.subheader("4. Top 10 Lapak Parkir Paling Sering Terisi")
+if slot_col in df_filtered.columns and occ_col in df_filtered.columns and not df_filtered.empty:
+    slot_occ = df_filtered.groupby(slot_col)[occ_col].mean().sort_values(ascending=False).head(10)
+    fig4, ax4 = plt.subplots(figsize=(10, 5))
+    slot_occ.sort_values(ascending=True).plot(kind="barh", color="teal", ax=ax4)
+    ax4.set_xlabel("Rata-rata Tingkat Okupansi")
+    ax4.set_ylabel("ID Lapak Parkir")
+    ax4.set_xticklabels(['{:.0f}%'.format(x*100) for x in ax4.get_xticks()])
+    st.pyplot(fig4)
+    
+    st.info(f"**Insight & Motivasi:** Menemukan titik-titik optimal seperti Slot {slot_occ.idxmax()} ini layaknya menemukan nilai maksimum dalam persamaan. Pertahankan ketelitianmu, karena detail terkecil selalu memegang kunci menuju pembuktian yang solid dan bermakna!")
+st.markdown("<br>", unsafe_allow_html=True)
 
-with g_col4:
-    st.subheader("🏆 Top 10 Slot Parkir Paling Padat")
-    if slot_col in df_filtered.columns and occ_col in df_filtered.columns:
-        slot_occ = df_filtered.groupby(slot_col)[occ_col].mean().sort_values(ascending=False).head(10)
-        fig4, ax4 = plt.subplots(figsize=(10, 5))
-        slot_occ.sort_values(ascending=True).plot(kind="barh", color="teal", ax=ax4)
-        ax4.set_xticklabels(['{:.0f}%'.format(x*100) for x in ax4.get_xticks()])
-        st.pyplot(fig4)
-        
-        with st.expander("💡 Narasi Data & Insight"):
-            slot_puncak = slot_occ.idxmax() if not slot_occ.empty else "N/A"
-            st.write(f"Menampilkan peringkat mikro 10 lapak parkir spesifik yang paling disukai pengemudi. Slot **{slot_puncak}** menempati urutan pertama. Informasi ini sangat berguna bagi tim teknis pemeliharaan jalan untuk memantau tingkat keausan permukaan aspal di slot-slot favorit tersebut.")
-    else:
-        st.info("Data slot tidak tersedia.")
-
-# ==========================================
-# 7. BARIS GRAFIK 3: FAKTOR CUACA
-# ==========================================
-st.markdown("---")
-st.subheader("🌤️ Pengaruh Faktor Cuaca Terhadap Okupansi Lahan Parkir")
-if 'weather_label' in df_filtered.columns and occ_col in df_filtered.columns:
+# Grafik 5
+st.subheader("5. Pengaruh Kondisi Cuaca Terhadap Kepadatan")
+if 'weather_label' in df_filtered.columns and occ_col in df_filtered.columns and not df_filtered.empty:
     weather_occ = df_filtered.groupby("weather_label")[occ_col].mean().reset_index()
-    fig5, ax5 = plt.subplots(figsize=(15, 4))
+    fig5, ax5 = plt.subplots(figsize=(10, 4))
     sns.barplot(data=weather_occ, x="weather_label", y=occ_col, palette="Set2", ax=ax5)
+    ax5.set_xlabel("Kondisi Cuaca")
+    ax5.set_ylabel("Rata-rata Tingkat Okupansi")
     ax5.set_yticklabels(['{:.0f}%'.format(x*100) for x in ax5.get_yticks()])
     st.pyplot(fig5)
     
-    st.info("💡 **Narasi Analisis Cuaca:** Grafik di atas menganalisis dampak kondisi eksternal (cuaca) terhadap keputusan pengendara untuk memarkirkan kendaraannya di area terbuka. Berguna untuk memprediksi penurunan volume kendaraan saat kondisi hujan melanda.")
-else:
-    st.info("Data cuaca tidak tersedia.")
+    st.success("**Insight & Motivasi:** Variabel eksternal mungkin dapat menggeser hasil sementara, namun logika yang terstruktur selalu bisa mengkalibrasi modelnya. Tetaplah menjadi sosok yang adaptif dan percaya pada kekuatan analisis komputasimu!")
+    
+# ==========================================
+# 6. CLOSING STATEMENT (Angka Faitu Dpulu)
+# ==========================================
+st.markdown("---")
+st.markdown("""
+<div style='text-align: center; font-size: 18px; color: #555;'>
+    <em>"Setiap baris kode dan matriks data yang diolah hari ini adalah langkah pasti menuju pemodelan optimasi yang sempurna.<br>
+    Teruslah berproses, melangkah maju, dan jadilah yang terbaik hingga mencapai target absolut di <strong>angka 40</strong>!"</em>
+</div>
+""", unsafe_allow_html=True)

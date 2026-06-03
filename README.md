@@ -15,9 +15,8 @@ Interactive dashboard for exploring parking occupancy patterns using CNRPark+EXT
 
 ```bash
 streamlit run app.py
+```
 
-
----
 
 ## 4. Upload ke GitHub
 

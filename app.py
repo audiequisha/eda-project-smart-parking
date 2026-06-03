@@ -26,11 +26,12 @@ def load_data():
     # Menggunakan file dataset yang sudah bersih dari tahap EDA
     df = pd.read_csv("dashboard_dataset.csv")
     
-    # Memastikan kolom waktu bertipe datetime jika belum
+    # 1. Memastikan kolom waktu bertipe datetime jika belum
     if 'datetime' in df.columns:
-        df['datetime'] = pd.to_datetime(df['datetime'])
+        # errors='coerce' akan mengubah format yang tidak valid menjadi NaT (Not a Time) agar tidak error
+        df['datetime'] = pd.to_datetime(df['datetime'], errors='coerce')
         
-    # Mapping cuaca jika kolom weather_label belum terbentuk
+    # 2. Mapping cuaca jika kolom weather_label belum terbentuk
     if 'weather_label' not in df.columns and 'weather' in df.columns:
         df['weather_label'] = df['weather'].map({
             'O': 'Overcast (Mendung)', 
@@ -38,12 +39,23 @@ def load_data():
             'S': 'Sunny (Cerah)'
         })
         
-    # Membuat kolom day_type untuk filter tambahan jika belum ada
-    if 'day_type' not in df.columns and 'day_of_week' in df.columns:
-        df['day_type'] = df['day_of_week'].apply(lambda x: 'Weekend' if x >= 5 else 'Weekday')
-        
+    # 3. FIX ERROR: Membuat kolom day_type dengan aman
+    if 'day_type' not in df.columns:
+        if 'datetime' in df.columns:
+            # Mengambil angka hari secara otomatis dari datetime (0=Senin, ..., 5=Sabtu, 6=Minggu)
+            # Kita gunakan pd.notnull(x) untuk menghindari error jika ada data waktu yang kosong (NaT)
+            df['day_type'] = df['datetime'].dt.dayofweek.apply(
+                lambda x: 'Weekend' if pd.notnull(x) and x >= 5 else 'Weekday'
+            )
+        elif 'day_of_week' in df.columns:
+            # Opsi cadangan jika datetime tidak ada: 
+            # Paksa ubah teks di day_of_week menjadi angka (numeric), yang gagal akan jadi NaN
+            df['day_of_week_num'] = pd.to_numeric(df['day_of_week'], errors='coerce')
+            df['day_type'] = df['day_of_week_num'].apply(
+                lambda x: 'Weekend' if pd.notnull(x) and x >= 5 else 'Weekday'
+            )
+            
     return df
-
 try:
     df = load_data()
 except FileNotFoundError:

@@ -91,9 +91,17 @@ if selected_day_type != "Semua":
 # ==========================================
 # 4. KARTU RINGKASAN UTAMA (KPI METRICS)
 # ==========================================
-total_kamera = df_filtered['camera_id'].nunique() if 'camera_id' in df_filtered.columns else df_filtered['camera'].nunique()
-total_slot = df_filtered['slot_id'].nunique()
-avg_occupancy = df_filtered['occupied'].mean() * 100 if 'occupied' in df_filtered.columns else df_filtered['occupancy'].mean() * 100
+# Cek dan sesuaikan nama kolom secara dinamis agar tidak error
+cam_col = 'camera_id' if 'camera_id' in df_filtered.columns else 'camera'
+occ_col = 'occupied' if 'occupied' in df_filtered.columns else 'occupancy'
+
+# Mencari kolom yang namanya mengandung kata 'slot' (misal: slot_id, Slot, slotID)
+slot_cols = [col for col in df_filtered.columns if 'slot' in col.lower()]
+slot_col = slot_cols[0] if len(slot_cols) > 0 else df_filtered.columns[0] # Fallback aman
+
+total_kamera = df_filtered[cam_col].nunique()
+total_slot = df_filtered[slot_col].nunique()
+avg_occupancy = df_filtered[occ_col].mean() * 100
 
 col1, col2, col3 = st.columns(3)
 with col1:
@@ -112,20 +120,18 @@ graph_col1, graph_col2 = st.columns(2)
 
 with graph_col1:
     st.subheader("📊 Kepadatan Parkir per Area Kamera")
-    cam_col = 'camera_id' if 'camera_id' in df_filtered.columns else 'camera'
-    occ_col = 'occupied' if 'occupied' in df_filtered.columns else 'occupancy'
     
     camera_occ = df_filtered.groupby(cam_col)[occ_col].mean().sort_values(ascending=False)
     
     fig1, ax1 = plt.subplots(figsize=(10, 5))
     camera_occ.plot(kind="bar", color="coral", ax=ax1)
-    ax1.set_xlabel("ID Kamera")
+    ax1.set_xlabel("Kamera")
     ax1.set_ylabel("Tingkat Okupansi")
     ax1.set_yticklabels(['{:.0f}%'.format(x*100) for x in ax1.get_yticks()])
     st.pyplot(fig1)
 
 with graph_col2:
-    st.subheader("📈 Pola Okupansi Berdasarkan Jam (Peak Hours)")
+    st.subheader("📈 Pola Okupansi Berdasarkan Jam")
     if 'hour' in df_filtered.columns:
         hourly_occ = df_filtered.groupby('hour')[occ_col].mean()
         
@@ -146,29 +152,26 @@ graph_col3, graph_col4 = st.columns(2)
 
 with graph_col3:
     st.subheader("🏆 Top 10 Slot Parkir Paling Padat")
-    slot_occ = df_filtered.groupby("slot_id")[occ_col].mean().sort_values(ascending=False).head(10)
+    # Menggunakan slot_col yang sudah dicari otomatis di atas
+    slot_occ = df_filtered.groupby(slot_col)[occ_col].mean().sort_values(ascending=False).head(10)
     
     fig3, ax3 = plt.subplots(figsize=(10, 5))
     slot_occ.sort_values(ascending=True).plot(kind="barh", color="teal", ax=ax3)
     ax3.set_xlabel("Rata-rata Tingkat Okupansi")
-    ax3.set_ylabel("ID Slot")
+    ax3.set_ylabel("Area Slot")
     ax3.set_xticklabels(['{:.0f}%'.format(x*100) for x in ax3.get_xticks()])
     st.pyplot(fig3)
 
 with graph_col4:
     st.subheader("🌤️ Tingkat Okupansi Berdasarkan Cuaca")
-    weather_occ = df_filtered.groupby("weather_label")[occ_col].mean().reset_index()
-    
-    fig4, ax4 = plt.subplots(figsize=(10, 5))
-    sns.barplot(data=weather_occ, x="weather_label", y=occ_col, palette="Set2", ax=ax4)
-    ax4.set_xlabel("Kondisi Cuaca")
-    ax4.set_ylabel("Rata-rata Tingkat Okupansi")
-    ax4.set_yticklabels(['{:.0f}%'.format(x*100) for x in ax4.get_yticks()])
-    st.pyplot(fig4)
-
-# ==========================================
-# 7. PREVIEW DATA BERSIH
-# ==========================================
-st.markdown("---")
-st.subheader("📋 Sampel Data Terfilter")
-st.dataframe(df_filtered.head(100))
+    if 'weather_label' in df_filtered.columns:
+        weather_occ = df_filtered.groupby("weather_label")[occ_col].mean().reset_index()
+        
+        fig4, ax4 = plt.subplots(figsize=(10, 5))
+        sns.barplot(data=weather_occ, x="weather_label", y=occ_col, palette="Set2", ax=ax4)
+        ax4.set_xlabel("Kondisi Cuaca")
+        ax4.set_ylabel("Rata-rata Tingkat Okupansi")
+        ax4.set_yticklabels(['{:.0f}%'.format(x*100) for x in ax4.get_yticks()])
+        st.pyplot(fig4)
+    else:
+        st.info("Kolom cuaca tidak ditemukan.")

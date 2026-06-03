@@ -1,183 +1,162 @@
 import streamlit as st
 import pandas as pd
-import plotly.express as px
+import matplotlib.pyplot as plt
+import seaborn as sns
 
+# ==========================================
+# 1. KONFIGURASI HALAMAN & STYLE
+# ==========================================
 st.set_page_config(
-    page_title="Smart Parking Dashboard",
+    page_title="Smart Parking Occupancy Dashboard",
+    page_icon="🚗",
     layout="wide"
 )
 
-# ==========================
-# LOAD DATA
-# ==========================
+sns.set_style("whitegrid")
 
+# Title Dashboard
+st.title("🚗 Smart Parking Real-Time Occupancy Dashboard")
+st.markdown("Dashboard interaktif untuk memonitor tingkat kepadatan dan pola penggunaan lahan parkir berdasarkan data observasi kamera.")
+
+# ==========================================
+# 2. LOAD DATA
+# ==========================================
 @st.cache_data
 def load_data():
-    df = pd.read_csv("data/dashboard_dataset.csv")
-    df["timestamp"] = pd.to_datetime(df["timestamp"])
+    # Menggunakan file dataset yang sudah bersih dari tahap EDA
+    df = pd.read_csv("dashboard_dataset.csv")
+    
+    # Memastikan kolom waktu bertipe datetime jika belum
+    if 'datetime' in df.columns:
+        df['datetime'] = pd.to_datetime(df['datetime'])
+        
+    # Mapping cuaca jika kolom weather_label belum terbentuk
+    if 'weather_label' not in df.columns and 'weather' in df.columns:
+        df['weather_label'] = df['weather'].map({
+            'O': 'Overcast (Mendung)', 
+            'R': 'Rainy (Hujan)', 
+            'S': 'Sunny (Cerah)'
+        })
+        
+    # Membuat kolom day_type untuk filter tambahan jika belum ada
+    if 'day_type' not in df.columns and 'day_of_week' in df.columns:
+        df['day_type'] = df['day_of_week'].apply(lambda x: 'Weekend' if x >= 5 else 'Weekday')
+        
     return df
 
-df = load_data()
+try:
+    df = load_data()
+except FileNotFoundError:
+    st.error("File 'dashboard_dataset.csv' tidak ditemukan. Pastikan file csv berada dalam satu folder dengan script app.py ini.")
+    st.stop()
 
-# ==========================
-# SIDEBAR
-# ==========================
+# ==========================================
+# 3. SIDEBAR CONTROLS (FILTER INTERAKTIF)
+# ==========================================
+st.sidebar.header("⚙️ Filter Eksplorasi")
 
-st.sidebar.title("Filter")
+# Filter Cuaca
+list_cuaca = ["Semua"] + list(df['weather_label'].dropna().unique())
+selected_weather = st.sidebar.selectbox("Pilih Kondisi Cuaca:", list_cuaca)
 
-camera = st.sidebar.multiselect(
-    "Camera",
-    df["camera_id"].unique(),
-    default=df["camera_id"].unique()
-)
+# Filter Tipe Hari
+if 'day_type' in df.columns:
+    list_hari = ["Semua"] + list(df['day_type'].unique())
+    selected_day_type = st.sidebar.selectbox("Pilih Tipe Hari:", list_hari)
+else:
+    selected_day_type = "Semua"
 
-weather = st.sidebar.multiselect(
-    "Weather",
-    df["weather"].unique(),
-    default=df["weather"].unique()
-)
+# Mengaplikasikan Filter ke Dataset
+df_filtered = df.copy()
 
-filtered = df[
-    (df["camera_id"].isin(camera)) &
-    (df["weather"].isin(weather))
-]
+if selected_weather != "Semua":
+    df_filtered = df_filtered[df_filtered['weather_label'] == selected_weather]
 
-# ==========================
-# HEADER
-# ==========================
+if selected_day_type != "Semua":
+    df_filtered = df_filtered[df_filtered['day_type'] == selected_day_type]
 
-st.title("🚗 Smart Parking Dashboard")
-st.caption("CNRPark Occupancy Analytics")
 
-# ==========================
-# KPI
-# ==========================
+# ==========================================
+# 4. KARTU RINGKASAN UTAMA (KPI METRICS)
+# ==========================================
+total_kamera = df_filtered['camera_id'].nunique() if 'camera_id' in df_filtered.columns else df_filtered['camera'].nunique()
+total_slot = df_filtered['slot_id'].nunique()
+avg_occupancy = df_filtered['occupied'].mean() * 100 if 'occupied' in df_filtered.columns else df_filtered['occupancy'].mean() * 100
 
-col1,col2,col3=st.columns(3)
-
+col1, col2, col3 = st.columns(3)
 with col1:
-    st.metric(
-        "Average Occupancy",
-        f"{filtered['occupancy_rate'].mean()*100:.1f}%"
-    )
-
+    st.metric(label="Total Kamera Aktif", value=f"{total_kamera} Kamera")
 with col2:
-    st.metric(
-        "Peak Occupied",
-        int(filtered["occupied"].max())
-    )
-
+    st.metric(label="Total Slot Parkir Dimonitor", value=f"{total_slot} Slot")
 with col3:
-    st.metric(
-        "Total Observations",
-        len(filtered)
-    )
+    st.metric(label="Rata-rata Tingkat Okupansi", value=f"{avg_occupancy:.2f}%")
 
-# ==========================
-# TIME SERIES
-# ==========================
+st.markdown("---")
 
-st.subheader("Occupancy Trend")
+# ==========================================
+# 5. BARIS GRAFIK 1: KEPADATAN & TREN WAKTU
+# ==========================================
+graph_col1, graph_col2 = st.columns(2)
 
-trend = (
-    filtered
-    .groupby("timestamp")["occupancy_rate"]
-    .mean()
-    .reset_index()
-)
+with graph_col1:
+    st.subheader("📊 Kepadatan Parkir per Area Kamera")
+    cam_col = 'camera_id' if 'camera_id' in df_filtered.columns else 'camera'
+    occ_col = 'occupied' if 'occupied' in df_filtered.columns else 'occupancy'
+    
+    camera_occ = df_filtered.groupby(cam_col)[occ_col].mean().sort_values(ascending=False)
+    
+    fig1, ax1 = plt.subplots(figsize=(10, 5))
+    camera_occ.plot(kind="bar", color="coral", ax=ax1)
+    ax1.set_xlabel("ID Kamera")
+    ax1.set_ylabel("Tingkat Okupansi")
+    ax1.set_yticklabels(['{:.0f}%'.format(x*100) for x in ax1.get_yticks()])
+    st.pyplot(fig1)
 
-fig = px.line(
-    trend,
-    x="timestamp",
-    y="occupancy_rate"
-)
+with graph_col2:
+    st.subheader("📈 Pola Okupansi Berdasarkan Jam (Peak Hours)")
+    if 'hour' in df_filtered.columns:
+        hourly_occ = df_filtered.groupby('hour')[occ_col].mean()
+        
+        fig2, ax2 = plt.subplots(figsize=(10, 5))
+        hourly_occ.plot(kind="line", marker="o", color="dodgerblue", linewidth=2, ax=ax2)
+        ax2.set_xlabel("Jam Operasional")
+        ax2.set_ylabel("Rata-rata Okupansi")
+        ax2.set_xticks(range(0, 24))
+        ax2.set_yticklabels(['{:.0f}%'.format(x*100) for x in ax2.get_yticks()])
+        st.pyplot(fig2)
+    else:
+        st.info("Kolom 'hour' tidak ditemukan untuk membuat tren jam.")
 
-st.plotly_chart(
-    fig,
-    use_container_width=True
-)
+# ==========================================
+# 6. BARIS GRAFIK 2: TOP SLOT & FAKTOR CUACA
+# ==========================================
+graph_col3, graph_col4 = st.columns(2)
 
-# ==========================
-# CAMERA ANALYSIS
-# ==========================
+with graph_col3:
+    st.subheader("🏆 Top 10 Slot Parkir Paling Padat")
+    slot_occ = df_filtered.groupby("slot_id")[occ_col].mean().sort_values(ascending=False).head(10)
+    
+    fig3, ax3 = plt.subplots(figsize=(10, 5))
+    slot_occ.sort_values(ascending=True).plot(kind="barh", color="teal", ax=ax3)
+    ax3.set_xlabel("Rata-rata Tingkat Okupansi")
+    ax3.set_ylabel("ID Slot")
+    ax3.set_xticklabels(['{:.0f}%'.format(x*100) for x in ax3.get_xticks()])
+    st.pyplot(fig3)
 
-left,right=st.columns(2)
+with graph_col4:
+    st.subheader("🌤️ Tingkat Okupansi Berdasarkan Cuaca")
+    weather_occ = df_filtered.groupby("weather_label")[occ_col].mean().reset_index()
+    
+    fig4, ax4 = plt.subplots(figsize=(10, 5))
+    sns.barplot(data=weather_occ, x="weather_label", y=occ_col, palette="Set2", ax=ax4)
+    ax4.set_xlabel("Kondisi Cuaca")
+    ax4.set_ylabel("Rata-rata Tingkat Okupansi")
+    ax4.set_yticklabels(['{:.0f}%'.format(x*100) for x in ax4.get_yticks()])
+    st.pyplot(fig4)
 
-with left:
-
-    cam = (
-        filtered
-        .groupby("camera_id")
-        ["occupancy_rate"]
-        .mean()
-        .reset_index()
-    )
-
-    fig2 = px.bar(
-        cam,
-        x="camera_id",
-        y="occupancy_rate"
-    )
-
-    st.subheader("Occupancy by Camera")
-
-    st.plotly_chart(
-        fig2,
-        use_container_width=True
-    )
-
-with right:
-
-    hourly = (
-        filtered
-        .groupby("hour")
-        ["occupancy_rate"]
-        .mean()
-        .reset_index()
-    )
-
-    fig3 = px.line(
-        hourly,
-        x="hour",
-        y="occupancy_rate"
-    )
-
-    st.subheader("Hourly Pattern")
-
-    st.plotly_chart(
-        fig3,
-        use_container_width=True)
-
-# ==========================
-# HEATMAP
-# ==========================
-
-st.subheader("Heatmap")
-
-pivot = (
-    filtered
-    .pivot_table(
-        values="occupancy_rate",
-        index="day_of_week",
-        columns="hour",
-        aggfunc="mean"
-    )
-)
-
-fig4 = px.imshow(
-    pivot,
-    aspect="auto"
-)
-
-st.plotly_chart(
-    fig4,
-    use_container_width=True
-)
-
-# ==========================
-# DATA
-# ==========================
-
-st.subheader("Raw Data")
-
-st.dataframe(filtered)
+# ==========================================
+# 7. PREVIEW DATA BERSIH
+# ==========================================
+st.markdown("---")
+st.subheader("📋 Sampel Data Terfilter")
+st.dataframe(df_filtered.head(100))

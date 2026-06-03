@@ -3,21 +3,26 @@ import pandas as pd
 import plotly.express as px
 
 st.set_page_config(
-    page_title="Parking Occupancy Dashboard",
+    page_title="Smart Parking Dashboard",
     layout="wide"
 )
 
-# ==================
+# ==========================
 # LOAD DATA
-# ==================
-df = pd.read_csv("data/cnrpark_clean.csv")
+# ==========================
 
-# kalau timestamp belum datetime
-df["timestamp"] = pd.to_datetime(df["timestamp"])
+@st.cache_data
+def load_data():
+    df = pd.read_csv("data/dashboard_dataset.csv")
+    df["timestamp"] = pd.to_datetime(df["timestamp"])
+    return df
 
-# ==================
+df = load_data()
+
+# ==========================
 # SIDEBAR
-# ==================
+# ==========================
+
 st.sidebar.title("Filter")
 
 camera = st.sidebar.multiselect(
@@ -37,49 +42,54 @@ filtered = df[
     (df["weather"].isin(weather))
 ]
 
-# ==================
+# ==========================
 # HEADER
-# ==================
-st.title("🚗 Parking Occupancy Dashboard")
+# ==========================
 
-col1,col2,col3,col4 = st.columns(4)
+st.title("🚗 Smart Parking Dashboard")
+st.caption("CNRPark Occupancy Analytics")
 
-col1.metric(
-    "Total Records",
-    len(filtered)
-)
+# ==========================
+# KPI
+# ==========================
 
-col2.metric(
-    "Camera",
-    filtered["camera_id"].nunique()
-)
+col1,col2,col3=st.columns(3)
 
-col3.metric(
-    "Slot",
-    filtered["slot_id"].nunique()
-)
+with col1:
+    st.metric(
+        "Average Occupancy",
+        f"{filtered['occupancy_rate'].mean()*100:.1f}%"
+    )
 
-col4.metric(
-    "Avg Occupancy",
-    f"{filtered['occupied'].mean()*100:.1f}%"
-)
+with col2:
+    st.metric(
+        "Peak Occupied",
+        int(filtered["occupied"].max())
+    )
 
-# ==================
-# OCCUPANCY PER HOUR
-# ==================
-hourly = (
+with col3:
+    st.metric(
+        "Total Observations",
+        len(filtered)
+    )
+
+# ==========================
+# TIME SERIES
+# ==========================
+
+st.subheader("Occupancy Trend")
+
+trend = (
     filtered
-    .groupby("hour")["occupied"]
+    .groupby("timestamp")["occupancy_rate"]
     .mean()
     .reset_index()
 )
 
 fig = px.line(
-    hourly,
-    x="hour",
-    y="occupied",
-    markers=True,
-    title="Occupancy Rate by Hour"
+    trend,
+    x="timestamp",
+    y="occupancy_rate"
 )
 
 st.plotly_chart(
@@ -87,47 +97,87 @@ st.plotly_chart(
     use_container_width=True
 )
 
-# ==================
+# ==========================
 # CAMERA ANALYSIS
-# ==================
-cam = (
+# ==========================
+
+left,right=st.columns(2)
+
+with left:
+
+    cam = (
+        filtered
+        .groupby("camera_id")
+        ["occupancy_rate"]
+        .mean()
+        .reset_index()
+    )
+
+    fig2 = px.bar(
+        cam,
+        x="camera_id",
+        y="occupancy_rate"
+    )
+
+    st.subheader("Occupancy by Camera")
+
+    st.plotly_chart(
+        fig2,
+        use_container_width=True
+    )
+
+with right:
+
+    hourly = (
+        filtered
+        .groupby("hour")
+        ["occupancy_rate"]
+        .mean()
+        .reset_index()
+    )
+
+    fig3 = px.line(
+        hourly,
+        x="hour",
+        y="occupancy_rate"
+    )
+
+    st.subheader("Hourly Pattern")
+
+    st.plotly_chart(
+        fig3,
+        use_container_width=True)
+
+# ==========================
+# HEATMAP
+# ==========================
+
+st.subheader("Heatmap")
+
+pivot = (
     filtered
-    .groupby("camera_id")
-    ["occupied"]
-    .mean()
-    .reset_index()
+    .pivot_table(
+        values="occupancy_rate",
+        index="day_of_week",
+        columns="hour",
+        aggfunc="mean"
+    )
 )
 
-fig2 = px.bar(
-    cam,
-    x="camera_id",
-    y="occupied",
-    title="Average Occupancy per Camera"
+fig4 = px.imshow(
+    pivot,
+    aspect="auto"
 )
 
 st.plotly_chart(
-    fig2,
+    fig4,
     use_container_width=True
 )
 
-# ==================
-# WEATHER
-# ==================
-weather_occ = (
-    filtered
-    .groupby("weather")
-    ["occupied"]
-    .mean()
-    .reset_index()
-)
+# ==========================
+# DATA
+# ==========================
 
-fig3 = px.pie(
-    weather_occ,
-    names="weather",
-    values="occupied",
-    title="Occupancy by Weather"
-)
+st.subheader("Raw Data")
 
-st.plotly_chart(
-    fig3,
-    use_container_width=True)
+st.dataframe(filtered)

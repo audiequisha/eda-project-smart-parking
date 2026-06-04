@@ -98,7 +98,8 @@ slot_col = slot_cols[0] if len(slot_cols) > 0 else df_filtered.columns[0]
 
 total_kamera = df_filtered[cam_col].nunique() if cam_col in df_filtered.columns else 0
 total_slot = df_filtered[slot_col].nunique() if slot_col in df_filtered.columns else 0
-avg_occupancy = df_filtered[occ_col].mean() * 100 if occ_col in df_filtered.columns else 0
+# PERBAIKAN: Menghapus * 100 karena data sudah dalam format persentase
+avg_occupancy = df_filtered[occ_col].mean() if occ_col in df_filtered.columns else 0
 
 st.markdown("### Ringkasan Eksekutif")
 col1, col2, col3 = st.columns(3)
@@ -121,7 +122,8 @@ if cam_col in df_filtered.columns and occ_col in df_filtered.columns and not df_
     fig1, ax1 = plt.subplots(figsize=(10, 4))
     camera_occ.plot(kind="bar", color="coral", ax=ax1)
     ax1.set_ylabel("Okupansi (%)")
-    ax1.set_yticklabels(['{:.0f}%'.format(x*100) for x in ax1.get_yticks()])
+    # PERBAIKAN: x*100 diubah menjadi x
+    ax1.set_yticklabels(['{:.0f}%'.format(x) for x in ax1.get_yticks()])
     st.pyplot(fig1)
     
     st.success(f"**Insight & Motivasi:** Di balik distribusi bar ini, terdapat pola probabilitas yang menunggu untuk dipecahkan. Kamera {camera_occ.idxmax()} membuktikan dirinya sebagai titik kepadatan absolut. Teruslah tajam dalam memetakan setiap variabel, karena solusi yang presisi selalu berawal dari observasi yang akurat. Tetap semangat merumuskan inovasi!")
@@ -136,7 +138,8 @@ if 'hour' in df_filtered.columns and occ_col in df_filtered.columns and not df_f
     ax2.set_xlabel("Jam Operasional")
     ax2.set_ylabel("Rata-rata Okupansi")
     ax2.set_xticks(range(int(df_filtered['hour'].min()), int(df_filtered['hour'].max()) + 1))
-    ax2.set_yticklabels(['{:.0f}%'.format(x*100) for x in ax2.get_yticks()])
+    # PERBAIKAN: x*100 diubah menjadi x
+    ax2.set_yticklabels(['{:.0f}%'.format(x) for x in ax2.get_yticks()])
     st.pyplot(fig2)
     
     st.info(f"**Insight & Motivasi:** Seperti fungsi yang bergerak dinamis terhadap waktu, pergerakan tren ini membuktikan bahwa selalu ada titik ekuilibrium di setiap kesibukan (puncak di pukul {hourly_occ.idxmax()}:00). Jangan pernah lelah menyusun algoritma yang efisien untuk menghadapi segala perubahan yang dinamis di masa depan!")
@@ -150,7 +153,8 @@ if 'day_type' in df_filtered.columns and occ_col in df_filtered.columns and not 
     sns.barplot(data=day_occ, x='day_type', y=occ_col, palette="Pastel1", ax=ax3)
     ax3.set_xlabel("Tipe Hari")
     ax3.set_ylabel("Rata-Rata Okupansi")
-    ax3.set_yticklabels(['{:.0f}%'.format(x*100) for x in ax3.get_yticks()])
+    # PERBAIKAN: x*100 diubah menjadi x
+    ax3.set_yticklabels(['{:.0f}%'.format(x) for x in ax3.get_yticks()])
     st.pyplot(fig3)
     
     st.success("**Insight & Motivasi:** Perbedaan ritme antara akhir pekan dan hari kerja bukanlah sekadar angka, melainkan anomali yang memperkaya pemodelan kita. Jadikan setiap deviasi data sebagai pendorong untuk menyempurnakan kalkulasi akhir. Kedisiplinan dalam melihat dua sisi inilah yang melahirkan keputusan bisnis yang matang!")
@@ -164,7 +168,8 @@ if slot_col in df_filtered.columns and occ_col in df_filtered.columns and not df
     slot_occ.sort_values(ascending=True).plot(kind="barh", color="teal", ax=ax4)
     ax4.set_xlabel("Rata-rata Tingkat Okupansi")
     ax4.set_ylabel("ID Lapak Parkir")
-    ax4.set_xticklabels(['{:.0f}%'.format(x*100) for x in ax4.get_xticks()])
+    # PERBAIKAN: x*100 diubah menjadi x
+    ax4.set_xticklabels(['{:.0f}%'.format(x) for x in ax4.get_xticks()])
     st.pyplot(fig4)
     
     st.info(f"**Insight & Motivasi:** Menemukan titik-titik optimal seperti Slot {slot_occ.idxmax()} ini layaknya menemukan nilai maksimum dalam persamaan. Pertahankan ketelitianmu, karena detail terkecil selalu memegang kunci menuju pembuktian yang solid dan bermakna!")
@@ -178,7 +183,8 @@ if 'weather_label' in df_filtered.columns and occ_col in df_filtered.columns and
     sns.barplot(data=weather_occ, x="weather_label", y=occ_col, palette="Set2", ax=ax5)
     ax5.set_xlabel("Kondisi Cuaca")
     ax5.set_ylabel("Rata-rata Tingkat Okupansi")
-    ax5.set_yticklabels(['{:.0f}%'.format(x*100) for x in ax5.get_yticks()])
+    # PERBAIKAN: x*100 diubah menjadi x
+    ax5.set_yticklabels(['{:.0f}%'.format(x) for x in ax5.get_yticks()])
     st.pyplot(fig5)
     
     st.success("**Insight & Motivasi:** Variabel eksternal mungkin dapat menggeser hasil sementara, namun logika yang terstruktur selalu bisa mengkalibrasi modelnya. Tetaplah menjadi sosok yang adaptif dan percaya pada kekuatan analisis komputasimu!")
